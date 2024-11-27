@@ -1,0 +1,9 @@
+Metadata-Version: 2.1
+Name: multiearth-challenge
+Version: 1.0.0
+Summary: This repository provides tools for working with imagery supplied by the MultiEarth 2023 public challenge.
+Home-page: https://github.com/MIT-AI-Accelerator/multiearth-challenge
+Author: Greg Angelides
+License: MIT
+Requires-Python: >=3.8
+License-File: LICENSE
