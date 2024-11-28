@@ -1,275 +1,166 @@
+# =============================
+# 1. Import Libraries
+# =============================
+import tensorflow as tf
+from tensorflow.keras import layers, Model
+from tensorflow.keras.optimizers import Adam
+from tensorflow.keras.metrics import MeanIoU
+from tensorflow.keras.callbacks import EarlyStopping, ModelCheckpoint
 import numpy as np
-import pandas as pd
+import glob
+import matplotlib.pyplot as plt
 
-from pathlib import Path
-from colorama import Fore, Style
-from dateutil.parser import parse
+# =============================
+# 2. Define Preprocessing Functions
+# =============================
 
-from pixel_prediction.params import *
-from pixel_prediction.ml_logic.data import get_data_with_cache, clean_data, load_data_to_bq
-from pixel_prediction.ml_logic.model import initialize_model, compile_model, train_model, evaluate_model
-from pixel_prediction.ml_logic.preprocessor import preprocess_features
-from pixel_prediction.ml_logic.registry import load_model, save_model, save_results
-from pixel_prediction.ml_logic.registry import mlflow_run, mlflow_transition_model
-
-import mlflow
-
-def preprocess(min_date:str = '2009-01-01', max_date:str = '2015-01-01') -> None:
+def load_image(image_path, size=(256, 256)):
     """
-    - Query the raw dataset from Le Wagon's BigQuery dataset
-    - Cache query result as a local CSV if it doesn't exist locally
-    - Process query data
-    - Store processed data on your personal BQ (truncate existing table if it exists)
-    - No need to cache processed data as CSV (it will be cached when queried back from BQ during training)
+    Load and preprocess Landsat 8 image (assume 3-channel RGB).
+    Resizes to the required size and normalizes to [0, 1].
     """
+    image = tf.io.read_file(image_path)
+    image = tf.image.decode_png(image, channels=3)  # Adjust for your Landsat 8 format
+    image = tf.image.resize(image, size)
+    image = tf.cast(image, tf.float32) / 255.0  # Normalize to [0, 1]
+    return image
 
-    print(Fore.MAGENTA + "\n ⭐️ Use case: preprocess" + Style.RESET_ALL)
-
-    # Query raw data from BigQuery using `get_data_with_cache`
-    min_date = parse(min_date).strftime('%Y-%m-%d') # e.g '2009-01-01'
-    max_date = parse(max_date).strftime('%Y-%m-%d') # e.g '2009-01-01'
-
-    query = f"""
-        SELECT {",".join(COLUMN_NAMES_RAW)}
-        FROM `{GCP_PROJECT_WAGON}`.{BQ_DATASET}.raw_{DATA_SIZE}
-        WHERE pickup_datetime BETWEEN '{min_date}' AND '{max_date}'
-        ORDER BY pickup_datetime
+def load_mask(mask_path, size=(256, 256)):
     """
-
-    # Retrieve data using `get_data_with_cache`
-    data_query_cache_path = Path(LOCAL_DATA_PATH).joinpath("raw", f"query_{min_date}_{max_date}_{DATA_SIZE}.csv")
-    data_query = get_data_with_cache(
-        query=query,
-        gcp_project=GCP_PROJECT,
-        cache_path=data_query_cache_path,
-        data_has_header=True
-    )
-
-    # Process data
-    data_clean = clean_data(data_query)
-
-    X = data_clean.drop("fare_amount", axis=1)
-    y = data_clean[["fare_amount"]]
-
-    X_processed = preprocess_features(X)
-
-    # Load a DataFrame onto BigQuery containing [pickup_datetime, X_processed, y]
-    # using data.load_data_to_bq()
-    data_processed_with_timestamp = pd.DataFrame(np.concatenate((
-        data_clean[["pickup_datetime"]],
-        X_processed,
-        y,
-    ), axis=1))
-
-    load_data_to_bq(
-        data_processed_with_timestamp,
-        gcp_project=GCP_PROJECT,
-        bq_dataset=BQ_DATASET,
-        table=f'processed_{DATA_SIZE}',
-        truncate=True
-    )
-
-    print("✅ preprocess() done \n")
-
-@mlflow_run
-def train(
-        min_date:str = '2009-01-01',
-        max_date:str = '2015-01-01',
-        split_ratio: float = 0.02, # 0.02 represents ~ 1 month of validation data on a 2009-2015 train set
-        learning_rate=0.0005,
-        batch_size = 256,
-        patience = 2
-    ) -> float:
-
+    Load and preprocess binary segmentation mask.
+    Resizes to the required size and ensures binary values (0 or 1).
     """
-    - Download processed data from your BQ table (or from cache if it exists)
-    - Train on the preprocessed dataset (which should be ordered by date)
-    - Store training results and model weights
+    mask = tf.io.read_file(mask_path)
+    mask = tf.image.decode_png(mask, channels=1)  # Single-channel mask
+    mask = tf.image.resize(mask, size)
+    mask = tf.cast(mask > 128, tf.float32)  # Binarize mask (thresholding)
+    return mask
 
-    Return val_mae as a float
+def load_data(image_path, mask_path, size=(256, 256)):
     """
-
-    print(Fore.MAGENTA + "\n⭐️ Use case: train" + Style.RESET_ALL)
-    print(Fore.BLUE + "\nLoading preprocessed validation data..." + Style.RESET_ALL)
-
-    min_date = parse(min_date).strftime('%Y-%m-%d') # e.g '2009-01-01'
-    max_date = parse(max_date).strftime('%Y-%m-%d') # e.g '2009-01-01'
-
-    # Load processed data using `get_data_with_cache` in chronological order
-    # Try it out manually on console.cloud.google.com first!
-
-    # Below, our columns are called ['_0', '_1'....'_66'] on BQ, student's column names may differ
-    query = f"""
-        SELECT * EXCEPT(_0)
-        FROM `{GCP_PROJECT}`.{BQ_DATASET}.processed_{DATA_SIZE}
-        WHERE _0 BETWEEN '{min_date}' AND '{max_date}'
-        ORDER BY _0 ASC
+    Load image and mask together for TensorFlow dataset.
     """
+    image = load_image(image_path, size)
+    mask = load_mask(mask_path, size)
+    return image, mask
 
-    data_processed_cache_path = Path(LOCAL_DATA_PATH).joinpath("processed", f"processed_{min_date}_{max_date}_{DATA_SIZE}.csv")
-    data_processed = get_data_with_cache(
-        gcp_project=GCP_PROJECT,
-        query=query,
-        cache_path=data_processed_cache_path,
-        data_has_header=False
-    )
+# =============================
+# 3. Create Dataset Pipeline
+# =============================
 
-    if data_processed.shape[0] < 10:
-        print("❌ Not enough processed data retrieved to train on")
-        return None
-
-    # Create (X_train_processed, y_train, X_val_processed, y_val)
-    train_length = int(len(data_processed)*(1-split_ratio))
-
-    data_processed_train = data_processed.iloc[:train_length, :].sample(frac=1).to_numpy()
-    data_processed_val = data_processed.iloc[train_length:, :].sample(frac=1).to_numpy()
-
-    X_train_processed = data_processed_train[:, :-1]
-    y_train = data_processed_train[:, -1]
-
-    X_val_processed = data_processed_val[:, :-1]
-    y_val = data_processed_val[:, -1]
-
-    # Train model using `model.py`
-    model = load_model()
-
-    if model is None:
-        model = initialize_model(input_shape=X_train_processed.shape[1:])
-
-    model = compile_model(model, learning_rate=learning_rate)
-    model, history = train_model(
-        model, X_train_processed, y_train,
-        batch_size=batch_size,
-        patience=patience,
-        validation_data=(X_val_processed, y_val)
-    )
-
-    val_mae = np.min(history.history['val_mae'])
-
-    params = dict(
-        context="train",
-        training_set_size=DATA_SIZE,
-        row_count=len(X_train_processed),
-    )
-
-    # Save results on the hard drive using taxifare.ml_logic.registry
-    save_results(params=params, metrics=dict(mae=val_mae))
-
-    # Save model weight on the hard drive (and optionally on GCS too!)
-    save_model(model=model)
-
-    # The latest model should be moved to staging
-    # YOUR CODE HERE
-    # Get the MLflow client
-    client = mlflow.tracking.MlflowClient()
-
-    # Retrieve the latest version of the registered model
-    latest_version_info = client.get_latest_versions(
-        name=MLFLOW_MODEL_NAME, stages=["None"]  # "None" stage means it's unapproved
-    )[0]
-    new_model_version = latest_version_info.version
-
-    # Transition the model to "Staging"
-    client.transition_model_version_stage(
-        name=MLFLOW_MODEL_NAME,
-        version=new_model_version,
-        stage="Staging",
-        archive_existing_versions=False
-    )
-    print(f"✅ Model version {new_model_version} moved to Staging")
-
-    print("✅ train() done \n")
-
-    return val_mae
-
-
-@mlflow_run
-def evaluate(
-        min_date:str = '2014-01-01',
-        max_date:str = '2015-01-01',
-        stage: str = "Production"
-    ) -> float:
+def create_dataset(image_dir, mask_dir, batch_size=8, size=(256, 256)):
     """
-    Evaluate the performance of the latest production model on processed data
-    Return MAE as a float
+    Create a TensorFlow dataset from directories of images and masks.
     """
-    print(Fore.MAGENTA + "\n⭐️ Use case: evaluate" + Style.RESET_ALL)
+    image_paths = sorted(glob.glob(f"{image_dir}/*.png"))  # Adjust for your file format
+    mask_paths = sorted(glob.glob(f"{mask_dir}/*.png"))    # Adjust for your file format
 
-    model = load_model(stage=stage)
-    assert model is not None
+    dataset = tf.data.Dataset.from_tensor_slices((image_paths, mask_paths))
+    dataset = dataset.map(lambda img, msk: load_data(img, msk, size), num_parallel_calls=tf.data.AUTOTUNE)
+    dataset = dataset.batch(batch_size).prefetch(tf.data.AUTOTUNE)
+    return dataset
 
-    min_date = parse(min_date).strftime('%Y-%m-%d') # e.g '2009-01-01'
-    max_date = parse(max_date).strftime('%Y-%m-%d') # e.g '2009-01-01'
+# =============================
+# 4. Define U-Net Model
+# =============================
 
-    # Query your BigQuery processed table and get data_processed using `get_data_with_cache`
-    query = f"""
-        SELECT * EXCEPT(_0)
-        FROM `{GCP_PROJECT}`.{BQ_DATASET}.processed_{DATA_SIZE}
-        WHERE _0 BETWEEN '{min_date}' AND '{max_date}'
+def build_unet(input_shape=(256, 256, 3)):
     """
-
-    data_processed_cache_path = Path(f"{LOCAL_DATA_PATH}/processed/processed_{min_date}_{max_date}_{DATA_SIZE}.csv")
-    data_processed = get_data_with_cache(
-        gcp_project=GCP_PROJECT,
-        query=query,
-        cache_path=data_processed_cache_path,
-        data_has_header=False
-    )
-
-    if data_processed.shape[0] == 0:
-        print("❌ No data to evaluate on")
-        return None
-
-    data_processed = data_processed.to_numpy()
-
-    X_new = data_processed[:, :-1]
-    y_new = data_processed[:, -1]
-
-    metrics_dict = evaluate_model(model=model, X=X_new, y=y_new)
-    mae = metrics_dict["mae"]
-
-    params = dict(
-        context="evaluate", # Package behavior
-        training_set_size=DATA_SIZE,
-        row_count=len(X_new)
-    )
-
-    save_results(params=params, metrics=metrics_dict)
-
-    print("✅ evaluate() done \n")
-
-    return mae
-
-
-def pred(X_pred: pd.DataFrame = None) -> np.ndarray:
+    Build U-Net model for binary segmentation.
     """
-    Make a prediction using the latest trained model
+    inputs = layers.Input(input_shape)
+
+    # Encoder
+    c1 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(inputs)
+    c1 = layers.Dropout(0.2)(c1)
+    c1 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(c1)
+    p1 = layers.MaxPooling2D((2, 2))(c1)
+
+    c2 = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(p1)
+    c2 = layers.Dropout(0.2)(c2)
+    c2 = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(c2)
+    p2 = layers.MaxPooling2D((2, 2))(c2)
+
+    # Bottleneck
+    b1 = layers.Conv2D(256, (3, 3), activation='relu', padding='same')(p2)
+    b1 = layers.Dropout(0.3)(b1)
+    b1 = layers.Conv2D(256, (3, 3), activation='relu', padding='same')(b1)
+
+    # Decoder
+    u1 = layers.UpSampling2D((2, 2))(b1)
+    u1 = layers.Concatenate()([u1, c2])
+    c3 = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(u1)
+    c3 = layers.Conv2D(128, (3, 3), activation='relu', padding='same')(c3)
+
+    u2 = layers.UpSampling2D((2, 2))(c3)
+    u2 = layers.Concatenate()([u2, c1])
+    c4 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(u2)
+    c4 = layers.Conv2D(64, (3, 3), activation='relu', padding='same')(c4)
+
+    # Output
+    outputs = layers.Conv2D(1, (1, 1), activation='sigmoid')(c4)
+
+    return Model(inputs, outputs)
+
+# =============================
+# 5. Train the Model
+# =============================
+
+# Directories for images and masks
+image_dir = '/path/to/images'
+mask_dir = '/path/to/masks'
+
+# Create datasets
+train_dataset = create_dataset(f"{image_dir}/train", f"{mask_dir}/train")
+val_dataset = create_dataset(f"{image_dir}/val", f"{mask_dir}/val")
+
+# Build and compile the model
+model = build_unet()
+model.compile(optimizer=Adam(learning_rate=0.001),
+              loss='binary_crossentropy',
+              metrics=['accuracy', MeanIoU(num_classes=2)])
+
+# Set callbacks
+early_stopping = EarlyStopping(patience=10, restore_best_weights=True)
+model_checkpoint = ModelCheckpoint('best_model.h5', save_best_only=True)
+
+# Train the model
+history = model.fit(
+    train_dataset,
+    validation_data=val_dataset,
+    epochs=50,
+    callbacks=[early_stopping, model_checkpoint]
+)
+
+# =============================
+# 6. Visualize Results
+# =============================
+
+def visualize_predictions(model, dataset, num_samples=3):
     """
+    Visualize predictions from the trained model.
+    """
+    for images, masks in dataset.take(num_samples):
+        preds = model.predict(images)
+        preds = tf.round(preds)
 
-    print("\n⭐️ Use case: predict")
+        for i in range(len(images)):
+            plt.figure(figsize=(12, 4))
+            plt.subplot(1, 3, 1)
+            plt.title("Input Image")
+            plt.imshow(images[i].numpy())
+            plt.axis("off")
 
-    if X_pred is None:
-        X_pred = pd.DataFrame(dict(
-        pickup_datetime=[pd.Timestamp("2013-07-06 17:18:00", tz='UTC')],
-        pickup_longitude=[-73.950655],
-        pickup_latitude=[40.783282],
-        dropoff_longitude=[-73.984365],
-        dropoff_latitude=[40.769802],
-        passenger_count=[1],
-    ))
+            plt.subplot(1, 3, 2)
+            plt.title("True Mask")
+            plt.imshow(masks[i].numpy().squeeze(), cmap="gray")
+            plt.axis("off")
 
-    model = load_model()
-    assert model is not None
+            plt.subplot(1, 3, 3)
+            plt.title("Predicted Mask")
+            plt.imshow(preds[i].numpy().squeeze(), cmap="gray")
+            plt.axis("off")
+            plt.show()
 
-    X_processed = preprocess_features(X_pred)
-    y_pred = model.predict(X_processed)
-
-    print("\n✅ prediction done: ", y_pred, y_pred.shape, "\n")
-    return y_pred
-
-
-if __name__ == '__main__':
-    preprocess(min_date='2009-01-01', max_date='2015-01-01')
-    train(min_date='2009-01-01', max_date='2015-01-01')
-    evaluate(min_date='2009-01-01', max_date='2015-01-01')
-    pred()
+# Visualize predictions
+visualize_predictions(model, val_dataset)
