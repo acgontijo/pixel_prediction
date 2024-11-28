@@ -27,6 +27,7 @@ def small_data(directory_y, directory_x, substring, num_files, resize_to=(85, 85
 
     # Select filenames from y directory based on the substring
     filtered_filenames_y = [f for f in os.listdir(directory_y) if substring in f]
+    random.seed(42)
     selected_filenames_y = random.sample(filtered_filenames_y, num_files)
     selected_filepaths_y = [os.path.join(directory_y, filename) for filename in selected_filenames_y]
 
