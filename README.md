@@ -11,9 +11,9 @@ This project uses a U-Net model to classify deforested areas in satellite imager
 
 ## Setup
 1. Clone the repository:
-   ```bash
-   git clone https://github.com/acgontijo/pixel_prediction.git
-
+```
+git clone https://github.com/acgontijo/pixel_prediction.git
+```
 2.	Install dependencies:
 ```
 pip install -r requirements.txt
