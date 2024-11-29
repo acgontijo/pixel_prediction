@@ -1,34 +1,36 @@
-wheel
-nbresult
-colorama
-ipdb
-ipykernel
-yapf
-matplotlib
-pygeohash
-pytest
-seaborn
-numpy==1.23.5
-pandas==1.5.3
-scipy==1.10.0
-scikit-learn==1.3.1
-google-cloud-bigquery
-google-cloud-storage==2.14.0
-google-api-core==2.8.2
-googleapis-common-protos==1.56.4
-protobuf==3.19.6
-h5py==3.10.0
-db-dtypes
-pyarrow
-# Trick to install the version of Tensorflow depending on your processor: darwin == Mac, ARM == M1
-tensorflow-macos==2.10.0; sys_platform == 'darwin' and 'ARM' in platform_version # Mac M-chips
-tensorflow==2.10.0; sys_platform == 'darwin' and 'ARM' not in platform_version # Mac Intel chips
-tensorflow==2.10.0; sys_platform != 'darwin' # Windows & Ubuntu Intel chips
+# Core Libraries
+numpy==1.26.0            # Numerical computations; compatible with TensorFlow
+pandas==1.5.3            # Required for compatibility with mlflow
+scipy==1.10.1            # Scientific computations
+scikit-learn==1.3.1      # Machine learning tools
 
-# prevent bq 3+ db-dtypes package error when running training from bq
+# Visualization Libraries
+matplotlib               # Visualization and plotting
+seaborn                  # Statistical data visualization
 
-mlflow==2.1.1
-prefect==2.19.2
+# TensorFlow and Related Dependencies
+tensorflow-macos==2.16.2; sys_platform == 'darwin' and 'ARM' in platform_version
+tensorflow==2.16.2; sys_platform == 'darwin' and 'ARM' not in platform_version
+keras==3.4.0             # Compatible with TensorFlow 2.16.2
+h5py>=3.11.0             # HDF5 file handling for TensorFlow
+protobuf>=3.20.3,<6      # Required by TensorFlow
+tensorboard==2.16.2      # TensorFlow visualization tool
+ml-dtypes==0.3.1         # Compatible with TensorFlow 2.16.2
 
-python-dotenv
-psycopg2-binary
+# Geospatial Processing
+rasterio==1.4.2          # Geospatial raster data processing
+xarray==2023.6.0         # Compatible with pandas==1.5.3
+
+# Utilities
+pytest                   # Testing framework
+python-dotenv            # Environment variable management
+colorama                 # Colored terminal text
+
+# Development Tools
+ipython                  # Interactive Python shell
+ipykernel                # Kernel for Jupyter notebooks
+yapf                     # Code formatting tool
+ipdb                     # Debugger
+
+# MLflow (specific requirements)
+mlflow==2.1.1            # Model lifecycle management
