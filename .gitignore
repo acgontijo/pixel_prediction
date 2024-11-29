@@ -1,5 +1,20 @@
-data/raw
-
+# Mac
 .DS_Store
 
+# Python
+__pycache__/
+*.py[cod]
+*.pyo
 
+# Data and models
+data/processed/
+data/raw
+*.keras
+*.h5
+*.npy
+
+# Logs
+logs/
+
+# Environment
+.env/
