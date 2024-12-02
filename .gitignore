@@ -10,6 +10,7 @@ __pycache__/
 # Data and models
 data/processed/
 data/raw
+data/filtered
 *.keras
 *.h5
 *.npy
