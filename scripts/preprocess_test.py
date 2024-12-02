@@ -3,20 +3,8 @@ from PIL import Image
 import os
 import random
 
-##################################
 
 
-# INPUT INFO:
-
-#     substring = "2021_05"
-#     substring_day = "26"
-
-
-##################################
-
-
-
-# Function to normalize an image to [0, 255]
 def normalize_image(image):
     image = image.astype(np.float32)  # Convert to float for scaling
     max_value = np.max(image)
@@ -32,7 +20,7 @@ def load_image(image_path):
 
 
 def small_data_test(directory_y, directory_x, substring, num_files, resize_to=(85, 85)):
-    
+
     # Select filenames from y directory based on the substring
     filtered_filenames_y = [f for f in os.listdir(directory_y) if substring in f]
     random.seed(42)
@@ -46,6 +34,8 @@ def small_data_test(directory_y, directory_x, substring, num_files, resize_to=(8
             continue
 
         matching_substring = filename[-27:-8]
+
+        band = None
 
             # Check if the file ends with '14' before processing it
         if filename.endswith('26.tiff'):
