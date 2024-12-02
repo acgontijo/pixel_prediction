@@ -34,3 +34,7 @@ ipdb                     # Debugger
 
 # MLflow (specific requirements)
 mlflow==2.1.1            # Model lifecycle management
+
+# API
+fastapi
+uvicorn

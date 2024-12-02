@@ -19,8 +19,8 @@ if __name__ == "__main__":
         y_train = y_train[..., tf.newaxis]
 
     # Normalize and binarize data
-    X_train = X_train.astype('float32') / 255.0
-    y_train = (y_train > 0.5).astype('float32')
+    X_train = X_train.astype('float32') / X_train.max()
+    y_train = y_train.astype('float32')
 
     # Save preprocessed data
     np.save(os.path.join(PROCESSED_DIR, "X_train.npy"), X_train)
@@ -30,6 +30,11 @@ if __name__ == "__main__":
     # Build the model
     print("Building the U-Net model...")
     model = build_unet(input_shape=(IMAGE_SIZE[0], IMAGE_SIZE[1], 3))
+    model.compile(
+            optimizer='adam',
+            loss='binary_crossentropy',
+            metrics=['accuracy']
+        )
 
     # Train the model
     print("Training the model...")
@@ -47,3 +52,4 @@ if __name__ == "__main__":
     visualize_predictions(model, val_dataset, save_dir=VISUALIZATION_DIR)
 
     print("Pipeline completed successfully!")
+
