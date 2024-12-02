@@ -21,7 +21,7 @@ def filter_rgb_images(source_folder, destination_folder, substring):
     # Iterate over all files and organize RGB bands
     bands_dict = {}  # To store paths of R, G, B images keyed by matching substring
     for filename in os.listdir(source_folder):
-        if filename.endswith('26.tiff') and len(filename) >= 27:
+        if filename.endswith('16.tiff') and len(filename) >= 27:
             key = filename[-27:-8]
             if substring in key:
                 if 'SR_B4' in filename:
@@ -55,9 +55,9 @@ def filter_rgb_images(source_folder, destination_folder, substring):
 
 # Set source and destination folders, and substring filter
 source_folder = "../data/raw/images"
-destination_folder = "../data/filtered/images_2021"
-substring = "2021_05"
+destination_folder = "../data/filtered/images_2016"
+substring = "2016_08"
 
 # Execute the processing function
-process_rgb_images(source_folder, destination_folder, substring)
+filter_rgb_images(source_folder, destination_folder, substring)
 print(f"Processed images saved to {destination_folder}")

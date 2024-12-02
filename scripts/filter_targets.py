@@ -11,8 +11,8 @@ def resize_image(image_path, resize_to=(85, 85)):
 
 # Define paths and filter criteria
 source_folder = "../data/raw/targets"
-destination_folder = "../data/filtered/targets_2016"
-filter_string = "2016_08_01"
+destination_folder = "../data/filtered/targets_2021"
+filter_string = "2021_05_01"
 file_extension = ".tiff"
 
 # Ensure the destination folder exists
