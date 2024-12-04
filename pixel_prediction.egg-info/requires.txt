@@ -9,11 +9,11 @@ h5py>=3.11.0
 protobuf<6,>=3.20.3
 tensorboard==2.16.2
 ml-dtypes==0.3.1
-rasterio==1.4.2
 xarray==2023.6.0
 pytest
 python-dotenv
 colorama
+pydantic==1.10.8
 ipython
 ipykernel
 yapf

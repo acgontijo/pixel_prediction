@@ -18,13 +18,15 @@ tensorboard==2.16.2      # TensorFlow visualization tool
 ml-dtypes==0.3.1         # Compatible with TensorFlow 2.16.2
 
 # Geospatial Processing
-rasterio==1.4.2          # Geospatial raster data processing
+#rasterio==1.2.10          # Geospatial raster data processing
 xarray==2023.6.0         # Compatible with pandas==1.5.3
+
 
 # Utilities
 pytest                   # Testing framework
 python-dotenv            # Environment variable management
 colorama                 # Colored terminal text
+pydantic==1.10.8
 
 # Development Tools
 ipython                  # Interactive Python shell

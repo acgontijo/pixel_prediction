@@ -9,7 +9,12 @@ pixel_prediction.egg-info/not-zip-safe
 pixel_prediction.egg-info/requires.txt
 pixel_prediction.egg-info/top_level.txt
 scripts/__init__.py
+scripts/delta.py
+scripts/filter_images.py
+scripts/filter_targets.py
+scripts/inference_preprocess.py
 scripts/preprocess.py
+scripts/preprocess_test.py
 scripts/run_preprocess.py
 scripts/train.py
 scripts/visualize.py

@@ -1,7 +1,12 @@
 Metadata-Version: 2.1
 Name: pixel-prediction
 Version: 0.0.4
-Summary: pixel_prediction Model (unet)
-Author: Quacso
-Author-email: 
+Summary: Pixel Prediction Model (U-Net) for deforestation detection
+Home-page: https://github.com/acgontijo/pixel_prediction
+Author: acgontijo
+Author-email: example@example.com
 License: MIT
+Classifier: Programming Language :: Python :: 3
+Classifier: License :: OSI Approved :: MIT License
+Classifier: Operating System :: OS Independent
+Requires-Python: >=3.8
