@@ -21,7 +21,7 @@ COPY setup.py setup.py
 COPY /api /api
 
 # Install the package
-#RUN pip install .
+# RUN pip install .
 
 # Run the API
-CMD uvicorn api.api:app --host 0.0.0.0 --port $PORT
+CMD uvicorn api.api:app --host 0.0.0.0 --port ${PORT:-8000}
